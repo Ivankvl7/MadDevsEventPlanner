@@ -8,8 +8,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.routers import auth, events
 
 app = FastAPI(title="EventPlanner API")
+app.include_router(auth.router)
+app.include_router(events.router)
 
 
 @app.get("/api/health")

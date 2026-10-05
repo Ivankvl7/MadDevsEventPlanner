@@ -30,3 +30,7 @@ line-length = 100
 [tool.ruff.lint]
 # Файлы на Windows-диске выглядят исполняемыми в Linux/WSL — проверка бессмысленна.
 ignore = ["EXE002"]
+
+[tool.ruff.lint.isort]
+# Папка миграций называется alembic — без подсказки ruff принимает пакет за локальный.
+known-third-party = ["alembic"]
