@@ -16,3 +16,4 @@ dist/
 # Local environment / secrets
 .env
 *.local
+.ruff_cache/

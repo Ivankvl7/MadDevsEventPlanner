@@ -1,0 +1,39 @@
+# Локальный запуск: docker compose up --build
+# Значения по умолчанию — только для локальной разработки. Переопределяются через .env (см. .env.example).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-eventplanner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eventplanner}
+      POSTGRES_DB: ${POSTGRES_DB:-eventplanner}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # 5433 на хосте, чтобы не конфликтовать с локально установленной PostgreSQL.
+      - "${DB_HOST_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-eventplanner}:${POSTGRES_PASSWORD:-eventplanner}@db:5432/${POSTGRES_DB:-eventplanner}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_HOST_PORT:-8000}:8000"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_HOST_PORT:-8080}:80"
+
+volumes:
+  pgdata:

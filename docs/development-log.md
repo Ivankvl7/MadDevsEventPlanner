@@ -103,3 +103,31 @@
 **Не проверено.** Установка зависимостей на Windows у пользователя (`uv sync` после этих изменений) — выполняется пользователем. Наличие PostgreSQL / Docker / Node.js на Windows неизвестно.
 
 **Документация.** В `docs/stack.md` версия Python исправлена с «3.10+» на 3.14 (так создан `backend/`), добавлены причины для `email-validator`, `tzdata`, `httpx2`.
+
+---
+
+## 2026-10-05 23:40 — Этап 0: каркас проекта
+
+**Контекст.** Пользователь выполнил `uv sync` на Windows; у него установлены Docker Desktop, PostgreSQL и Node.js; сервис решено запускать через Docker.
+
+**Задача.** Минимальный работающий каркас: backend и frontend как отдельные приложения, PostgreSQL, запуск через docker compose, проверка связности.
+
+**Решения.**
+- `backend/app`: `config.py` (настройки из переменных окружения), `db.py` (engine SQLAlchemy, сессия на запрос), `main.py` (FastAPI, `GET /api/health` — 200 при доступной БД, 503 при недоступной). Шаблонный `backend/main.py` от `uv init` удалён — точка входа теперь `app.main:app`.
+- Тесты: `backend/tests`, pytest на настоящей PostgreSQL; тестовая база создаётся автоматически; адрес — `TEST_DATABASE_URL`.
+- Ruff: `line-length = 100`; правило `EXE002` отключено — на Windows-диске, смонтированном в Linux, все файлы выглядят исполняемыми. Замечание `B008` исправлено переходом на `Annotated[Session, Depends(get_db)]`.
+- `frontend`: React 19.3 + Vite 8.3 (JavaScript, без TypeScript — меньше настройки для небольшого числа экранов), версии зафиксированы точно. В dev-режиме `/api` проксируется на backend. Страница показывает статус backend. Роутер и прочие пакеты не добавлены — понадобятся на этапе frontend.
+- Docker: backend — `python:3.14-slim` + uv (зависимости по `uv.lock`, без dev); frontend — сборка в `node:22-alpine`, раздача через `nginx:1.27-alpine`, `/api` проксируется на backend с выключенной буферизацией (для будущего SSE).
+- `docker-compose.yml`: `db` (postgres:16-alpine, том `pgdata`, healthcheck), `backend` (ждёт healthy БД), `frontend`. PostgreSQL проброшена на порт хоста **5433**, чтобы не конфликтовать с установленной у пользователя PostgreSQL; на этот же порт указывают значения по умолчанию в `config.py` и тестах.
+- Пароли БД по умолчанию — только для локального запуска, переопределяются через `.env` (в `.gitignore`), шаблон — `.env.example`.
+- `README.md` — краткая инструкция запуска (будет дополнена в конце).
+- `.gitignore`: добавлен `.ruff_cache/`.
+
+**Проверки (выполнены в песочнице агента на компьютере пользователя, Linux, Python 3.14.7, PostgreSQL 16.2).**
+- `pytest`: 2 passed — health 200 при доступной БД, 503 при недоступной (подменённый адрес БД).
+- `ruff check` и `ruff format --check` — без замечаний.
+- `npm install` и `npm run build` (Vite) — сборка успешна; `package-lock.json` содержит нативные бинарники и для Windows (`win32-x64-msvc`), и для Alpine (`linux-x64-musl`). `npm install` выполнялся во временной копии вне папки проекта, чтобы не класть Linux-`node_modules` на Windows-диск; в проект скопированы только `package.json` и `package-lock.json`.
+- Живой запуск: uvicorn + Vite dev-сервер; `curl /api/health` напрямую и через прокси Vite → `{"status":"ok","database":"ok"}`; главная страница отдаётся. После остановки PostgreSQL живой сервер отвечает 503 `{"status":"error","database":"unavailable"}`.
+- `docker-compose.yml` разобран как YAML, состав сервисов верный.
+
+**Не проверено.** Сборка Docker-образов и `docker compose up` — в песочнице агента нет Docker; нужна проверка у пользователя. Конфигурация nginx не запускалась. Отображение страницы в браузере не проверялось (проверен только HTML-ответ и API).
