@@ -75,3 +75,31 @@
 **Решение.** Создан `docs/stack.md`: по каждому слою — выбор, причины, отклонённые альтернативы. Главный критерий — закрыть риски из `acceptance.md` средствами PostgreSQL и стандартных механизмов без дополнительной инфраструктуры. Итог: PostgreSQL 16; Python 3.10+ / FastAPI; SQLAlchemy 2 + psycopg 3 + Alembic; SSE + `LISTEN/NOTIFY`; фоновый цикл опроса БД вместо Celery/Redis; почта — outbox-заглушка в БД; серверные сессии в HttpOnly-cookie вместо JWT (нет секретного ключа, работает с `EventSource`); React + Vite; pytest на реальной PostgreSQL, Playwright для E2E; Docker Compose.
 
 **Проверки.** Нет — решения приняты до кода и реализацией ещё не подтверждены; это прямо указано в документе.
+
+---
+
+## 2026-10-05 23:33 — Проверка зависимостей backend
+
+**Контекст.** Пользователь открыл сетевой доступ (с компьютера пользователя pypi.org и registry.npmjs.org теперь отвечают 200; из облачного окружения агента — по-прежнему 403, поэтому вся работа идёт в песочнице на компьютере пользователя) и сам создал `backend/` через uv: Python 3.14, `fastapi`, `uvicorn[standard]`, dev: `pytest`, `ruff` (коммит пользователя `ad80787`).
+
+**Задача.** Проверить, каких зависимостей не хватает для стека из `docs/stack.md`.
+
+**Найдено и добавлено** (`uv add`, изменены `backend/pyproject.toml` и `backend/uv.lock`):
+- `sqlalchemy>=2.0`, `psycopg[binary]>=3.2`, `alembic>=1.14` — доступ к PostgreSQL и миграции;
+- `email-validator>=2.2` — нужен Pydantic для `EmailStr`;
+- `tzdata` — база часовых поясов для `zoneinfo` на Windows (окно чекина, R-11);
+- dev: `httpx2` — транспорт `TestClient`. Сначала был добавлен `httpx`, но при импорте `fastapi.testclient` Starlette выдал `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated; install httpx2 instead`, поэтому `httpx` заменён на `httpx2`.
+- Пакеты для frontend и E2E (Playwright) не добавлялись — они относятся к этапу frontend.
+
+**Окружение агента для проверок.** Отдельное Linux-окружение вне папки проекта (`UV_PROJECT_ENVIRONMENT` вне репозитория), чтобы не трогать Windows-`.venv` пользователя. Для тестов — PostgreSQL 16.2 из пакета `pgserver`, установленного в отдельное служебное окружение вне репозитория; в зависимости проекта он не входит.
+
+**Проверки (выполнены).**
+- `uv sync --locked` — lock согласован с `pyproject.toml`.
+- Lock-файл получил `revision = 3` (было 1, uv агента — 0.12.13, у пользователя по `.venv/pyvenv.cfg` — 0.6.5). Проверено, что `uv 0.6.5 sync --frozen` читает этот lock без ошибок.
+- Импорт всех пакетов на Python 3.14.7; `TestClient` выполнил запрос к тестовому FastAPI-приложению при `-W error::DeprecationWarning` — предупреждений нет.
+- SQLAlchemy + psycopg подключились к PostgreSQL 16.2 (`select version()`).
+- `zoneinfo.ZoneInfo("Asia/Bishkek")` и валидация `EmailStr` работают.
+
+**Не проверено.** Установка зависимостей на Windows у пользователя (`uv sync` после этих изменений) — выполняется пользователем. Наличие PostgreSQL / Docker / Node.js на Windows неизвестно.
+
+**Документация.** В `docs/stack.md` версия Python исправлена с «3.10+» на 3.14 (так создан `backend/`), добавлены причины для `email-validator`, `tzdata`, `httpx2`.
