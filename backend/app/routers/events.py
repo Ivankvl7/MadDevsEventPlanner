@@ -6,8 +6,9 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from app import clock, models
+from app import clock, mail, models, registrations
 from app.deps import DB, CurrentUser
+from app.models import RegistrationStatus as S
 from app.schemas import EventIn, EventOut, EventPatch, OrganizerOut
 
 router = APIRouter(prefix="/api/events", tags=["events"])
@@ -64,7 +65,8 @@ def get_event(event_id: int, db: DB) -> EventOut:
 
 @router.patch("/{event_id}")
 def update_event(event_id: int, data: EventPatch, db: DB, user: CurrentUser) -> EventOut:
-    event = get_event_or_404(db, event_id)
+    # Блокировка события: изменение лимита и перенос не пересекаются с регистрациями и отказами.
+    event = registrations.lock_event(db, event_id)
     if event.organizer_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Изменять событие может только организатор")
     changes = data.model_dump(exclude_unset=True, exclude_none=True)
@@ -78,7 +80,25 @@ def update_event(event_id: int, data: EventPatch, db: DB, user: CurrentUser) -> 
             )
         if changes["starts_at"] <= now:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Новая дата уже прошла")
+    if "capacity" in changes:
+        # R-10: уменьшать лимит ниже числа занятых мест нельзя — никого не выселяем.
+        confirmed = registrations.count_by_status(db, event.id, S.CONFIRMED)
+        if changes["capacity"] < confirmed:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"Нельзя сделать лимит меньше числа занятых мест ({confirmed})",
+            )
+
+    old_start = mail.format_start(event)
     for field, value in changes.items():
         setattr(event, field, value)
+    if reschedule:
+        event.schedule_version += 1
+        db.flush()
+        for reg in registrations.active_registrations(db, event.id):
+            mail.send_rescheduled(db, reg, event, old_start)
+    # R-10: при увеличении лимита очередь продвигается сама.
+    db.flush()
+    registrations.promote(db, event, now)
     db.commit()
     return event_out(get_event_or_404(db, event.id))

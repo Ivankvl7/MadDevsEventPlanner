@@ -70,3 +70,49 @@ class EventOut(BaseModel):
     timezone: str
     capacity: int
     organizer: OrganizerOut
+
+
+class RegistrationOut(BaseModel):
+    id: int
+    event_id: int
+    status: str
+    # Только у confirmed; у отменённой записи код не показывается.
+    ticket_code: str | None
+    # Только у waitlisted, начиная с 1.
+    waitlist_position: int | None
+
+
+class MyRegistrationOut(RegistrationOut):
+    event: EventOut
+
+
+class AttendeeOut(BaseModel):
+    registration_id: int
+    name: str
+    email: str
+    since: datetime
+
+
+class WaitlistEntryOut(AttendeeOut):
+    position: int
+
+
+class AttendeeCounts(BaseModel):
+    confirmed: int
+    waitlisted: int
+
+
+class AttendeesOut(BaseModel):
+    counts: AttendeeCounts
+    confirmed: list[AttendeeOut]
+    waitlist: list[WaitlistEntryOut]
+
+
+class MailOut(BaseModel):
+    id: int
+    kind: str
+    to_email: str
+    event_id: int | None
+    subject: str
+    body: str
+    created_at: datetime
