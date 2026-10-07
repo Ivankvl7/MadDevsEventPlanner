@@ -1,5 +1,8 @@
 """Точка входа backend."""
 
+import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Response, status
@@ -7,10 +10,25 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app import config, scheduler
 from app.db import get_db
 from app.routers import auth, checkin, events, mail, registrations
 
-app = FastAPI(title="EventPlanner API")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Фоновый цикл живёт столько же, сколько процесс backend."""
+    task = None
+    if config.SCHEDULER_ENABLED:
+        task = asyncio.create_task(scheduler.run_forever(config.SCHEDULER_INTERVAL_SECONDS))
+    yield
+    if task is not None:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(title="EventPlanner API", lifespan=lifespan)
 app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(registrations.router)

@@ -121,6 +121,8 @@ class MailOut(BaseModel):
     subject: str
     body: str
     created_at: datetime
+    # Когда фоновый цикл «доставил» письмо; None — ещё в очереди на отправку.
+    sent_at: datetime | None
 
 
 class CheckinIn(BaseModel):

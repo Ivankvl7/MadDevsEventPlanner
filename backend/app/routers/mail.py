@@ -29,6 +29,7 @@ def my_mail(db: DB, user: CurrentUser) -> list[MailOut]:
             subject=e.subject,
             body=e.body,
             created_at=e.created_at.astimezone(UTC),
+            sent_at=e.sent_at.astimezone(UTC) if e.sent_at else None,
         )
         for e in emails
     ]

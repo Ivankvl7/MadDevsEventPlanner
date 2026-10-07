@@ -21,6 +21,8 @@ TEST_DATABASE_URL = os.environ.get(
 
 # Подменяем адрес до импорта приложения: app.db создаёт engine при импорте.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# Фоновый цикл в тестах выключен: шаг вызывается напрямую с подменённым временем.
+os.environ["SCHEDULER_ENABLED"] = "0"
 
 from alembic import command
 from alembic.config import Config

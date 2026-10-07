@@ -4,6 +4,7 @@
 Уникальный ключ идемпотентности делает повторное создание того же письма no-op.
 """
 
+from datetime import UTC
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.dialects.postgresql import insert
@@ -15,6 +16,7 @@ TICKET = "ticket"
 PROMOTED = "promoted"
 WAITLISTED = "waitlisted"
 RESCHEDULED = "rescheduled"
+REMINDER = "reminder"
 
 
 def format_start(event: models.Event) -> str:
@@ -31,8 +33,9 @@ def enqueue(
     event: models.Event,
     subject: str,
     body: str,
-) -> None:
-    db.execute(
+) -> bool:
+    """Создать письмо. False — письмо с таким ключом уже было."""
+    result = db.execute(
         insert(models.OutboxEmail)
         .values(
             idempotency_key=key,
@@ -44,7 +47,10 @@ def enqueue(
             body=body,
         )
         .on_conflict_do_nothing(index_elements=["idempotency_key"])
+        # rowcount для ORM-вставки недостоверен (-1), поэтому смотрим на RETURNING.
+        .returning(models.OutboxEmail.id)
     )
+    return result.scalar() is not None
 
 
 def send_ticket(db: Session, reg: models.Registration, event: models.Event, *, promoted: bool):
@@ -103,5 +109,24 @@ def send_rescheduled(db: Session, reg: models.Registration, event: models.Event,
             f"Событие: {event.title}\n"
             f"Было: {old_start}\n"
             f"Стало: {format_start(event)}"
+        ),
+    )
+
+
+def send_reminder(db: Session, reg: models.Registration, event: models.Event) -> bool:
+    """B6 / R-7: одно напоминание на пару (запись, дата начала события)."""
+    start_key = event.starts_at.astimezone(UTC).isoformat()
+    return enqueue(
+        db,
+        key=f"reminder:{reg.id}:{start_key}",
+        kind=REMINDER,
+        reg=reg,
+        event=event,
+        subject=f"Напоминание: {event.title} — меньше чем через сутки",
+        body=(
+            "Напоминаем о событии.\n\n"
+            f"Событие: {event.title}\n"
+            f"Начало: {format_start(event)}\n"
+            f"Код билета: {reg.ticket_code}"
         ),
     )
