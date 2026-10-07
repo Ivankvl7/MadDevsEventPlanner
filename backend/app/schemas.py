@@ -93,6 +93,10 @@ class AttendeeOut(BaseModel):
     since: datetime
 
 
+class ConfirmedAttendeeOut(AttendeeOut):
+    checked_in_at: datetime | None
+
+
 class WaitlistEntryOut(AttendeeOut):
     position: int
 
@@ -100,11 +104,12 @@ class WaitlistEntryOut(AttendeeOut):
 class AttendeeCounts(BaseModel):
     confirmed: int
     waitlisted: int
+    checked_in: int
 
 
 class AttendeesOut(BaseModel):
     counts: AttendeeCounts
-    confirmed: list[AttendeeOut]
+    confirmed: list[ConfirmedAttendeeOut]
     waitlist: list[WaitlistEntryOut]
 
 
@@ -116,3 +121,16 @@ class MailOut(BaseModel):
     subject: str
     body: str
     created_at: datetime
+
+
+class CheckinIn(BaseModel):
+    code: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
+
+
+class CheckinOut(BaseModel):
+    registration_id: int
+    name: str
+    email: str
+    event_id: int
+    event_title: str
+    checked_in_at: datetime

@@ -252,7 +252,7 @@ def test_attendees_screen(client, make_client, frozen_clock):
     r = client.get(f"/api/events/{ev}/attendees")
     assert r.status_code == 200
     data = r.json()
-    assert data["counts"] == {"confirmed": 2, "waitlisted": 1}
+    assert data["counts"] == {"confirmed": 2, "waitlisted": 1, "checked_in": 0}
     assert [x["email"] for x in data["confirmed"]] == ["p1@example.com", "p2@example.com"]
     assert [(x["email"], x["position"]) for x in data["waitlist"]] == [("p3@example.com", 1)]
     assert data["confirmed"][0]["name"] == "p1"

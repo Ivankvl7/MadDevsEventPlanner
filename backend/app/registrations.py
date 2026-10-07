@@ -60,12 +60,15 @@ def waitlist_position(db: Session, reg: models.Registration) -> int | None:
     )
 
 
-def find_registration(db: Session, event_id: int, email: str) -> models.Registration | None:
-    return db.scalar(
-        select(models.Registration).where(
-            models.Registration.event_id == event_id, models.Registration.email == email
-        )
+def find_registration(
+    db: Session, event_id: int, email: str, *, for_update: bool = False
+) -> models.Registration | None:
+    query = select(models.Registration).where(
+        models.Registration.event_id == event_id, models.Registration.email == email
     )
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    return db.scalar(query)
 
 
 def _confirm(reg: models.Registration, now: datetime) -> None:
@@ -118,7 +121,8 @@ def cancel(db: Session, event_id: int, user: models.User) -> models.Registration
     """F3, R-5. Повторный отказ ничего не меняет; освободившееся место уходит очереди (B4)."""
     now = clock.now()
     event = lock_event(db, event_id)
-    reg = find_registration(db, event_id, user.email)
+    # Блокировка строки записи: отказ не пересечётся с одновременным чекином этого билета.
+    reg = find_registration(db, event_id, user.email, for_update=True)
     if reg is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Вы не зарегистрированы на это событие")
     if reg.status == S.CANCELLED:
@@ -126,6 +130,9 @@ def cancel(db: Session, event_id: int, user: models.User) -> models.Registration
         return reg
     if _started(event, now):
         raise HTTPException(status.HTTP_409_CONFLICT, "Событие уже началось, отказ невозможен")
+    if reg.checked_in_at is not None:
+        # R-11: отказ после чекина запрещён.
+        raise HTTPException(status.HTTP_409_CONFLICT, "Вы уже отмечены на входе, отказ невозможен")
 
     freed_seat = reg.status == S.CONFIRMED
     reg.status = S.CANCELLED

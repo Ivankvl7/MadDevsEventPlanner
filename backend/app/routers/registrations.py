@@ -12,8 +12,8 @@ from app.models import RegistrationStatus as S
 from app.routers.events import event_out, get_event_or_404
 from app.schemas import (
     AttendeeCounts,
-    AttendeeOut,
     AttendeesOut,
+    ConfirmedAttendeeOut,
     MyRegistrationOut,
     RegistrationOut,
     WaitlistEntryOut,
@@ -73,7 +73,7 @@ def my_registrations(db: DB, user: CurrentUser) -> list[MyRegistrationOut]:
 
 @router.get("/events/{event_id}/attendees")
 def attendees(event_id: int, db: DB, user: CurrentUser) -> AttendeesOut:
-    """F7: экран организатора — счётчики, участники и очередь."""
+    """F7: экран организатора — счётчики (записаны, в очереди, пришли), участники и очередь."""
     event = get_event_or_404(db, event_id)
     if event.organizer_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Список участников доступен организатору")
@@ -87,11 +87,12 @@ def attendees(event_id: int, db: DB, user: CurrentUser) -> AttendeesOut:
         .order_by(models.Registration.confirmed_at, models.Registration.id)
     ).all()
     confirmed = [
-        AttendeeOut(
+        ConfirmedAttendeeOut(
             registration_id=r.id,
             name=r.user.name,
             email=r.email,
             since=r.confirmed_at.astimezone(UTC),
+            checked_in_at=r.checked_in_at.astimezone(UTC) if r.checked_in_at else None,
         )
         for r in rows
         if r.status == S.CONFIRMED
@@ -108,7 +109,12 @@ def attendees(event_id: int, db: DB, user: CurrentUser) -> AttendeesOut:
         for i, r in enumerate(sorted(waiting, key=lambda r: r.waitlist_seq), start=1)
     ]
     return AttendeesOut(
-        counts=AttendeeCounts(confirmed=len(confirmed), waitlisted=len(waitlist)),
+        counts=AttendeeCounts(
+            confirmed=len(confirmed),
+            waitlisted=len(waitlist),
+            # Считается из данных, а не отдельным счётчиком (acceptance.md, 5.4).
+            checked_in=sum(1 for c in confirmed if c.checked_in_at is not None),
+        ),
         confirmed=confirmed,
         waitlist=waitlist,
     )

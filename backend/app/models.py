@@ -93,6 +93,9 @@ class Registration(Base):
         CheckConstraint(
             "status <> 'waitlisted' OR waitlist_seq IS NOT NULL", name="waitlisted_has_seq"
         ),
+        CheckConstraint(
+            "checked_in_at IS NULL OR status = 'confirmed'", name="checked_in_is_confirmed"
+        ),
         Index("ix_registrations_event_status", "event_id", "status"),
     )
 
@@ -109,6 +112,8 @@ class Registration(Base):
     waitlisted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Отметка на входе (F6, B7). Ставится атомарным условным UPDATE — ровно один раз.
+    checked_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     event: Mapped[Event] = relationship()
