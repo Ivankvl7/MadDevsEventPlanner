@@ -2,12 +2,12 @@
 
 from datetime import timedelta
 
-from fastapi import APIRouter, Cookie, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
 from app import clock, config, models
-from app.deps import DB, CurrentUser
+from app.deps import DB, CurrentUser, SessionCookie
 from app.schemas import LoginIn, RegisterIn, UserOut
 from app.security import (
     hash_password,
@@ -74,7 +74,7 @@ def login(data: LoginIn, db: DB, response: Response) -> UserOut:
 def logout(
     db: DB,
     response: Response,
-    session_token: str | None = Cookie(default=None, alias=config.SESSION_COOKIE),
+    session_token: SessionCookie = None,
 ) -> None:
     if session_token:
         db.execute(

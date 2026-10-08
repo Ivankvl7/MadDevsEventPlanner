@@ -13,10 +13,11 @@ from app.security import token_hash
 DB = Annotated[Session, Depends(get_db)]
 
 
-def optional_user(
-    db: DB,
-    session_token: Annotated[str | None, Cookie(alias=config.SESSION_COOKIE)] = None,
-) -> models.User | None:
+# Cookie сессии ставит и отправляет браузер; в Swagger поле не показываем — оно сбивает с толку.
+SessionCookie = Annotated[str | None, Cookie(alias=config.SESSION_COOKIE, include_in_schema=False)]
+
+
+def user_by_token(db: Session, session_token: str | None) -> models.User | None:
     if not session_token:
         return None
     return db.scalar(
@@ -27,6 +28,10 @@ def optional_user(
             models.Session.expires_at > clock.now(),
         )
     )
+
+
+def optional_user(db: DB, session_token: SessionCookie = None) -> models.User | None:
+    return user_by_token(db, session_token)
 
 
 def current_user(

@@ -4,7 +4,7 @@ from datetime import UTC
 
 from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import Session, joinedload
 
 from app import models, registrations
 from app.deps import DB, CurrentUser
@@ -77,6 +77,11 @@ def attendees(event_id: int, db: DB, user: CurrentUser) -> AttendeesOut:
     event = get_event_or_404(db, event_id)
     if event.organizer_id != user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Список участников доступен организатору")
+    return attendees_snapshot(db, event_id)
+
+
+def attendees_snapshot(db: Session, event_id: int) -> AttendeesOut:
+    """Состояние экрана организатора; тот же снимок уходит в live-поток (этап 5)."""
     rows = db.scalars(
         select(models.Registration)
         .options(joinedload(models.Registration.user))

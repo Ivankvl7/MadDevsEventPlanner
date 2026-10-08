@@ -13,7 +13,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import clock, mail, models
+from app import clock, live, mail, models
 from app.models import RegistrationStatus as S
 
 # R-16: без похожих символов (0/O, 1/I/L).
@@ -113,6 +113,7 @@ def register(db: Session, event_id: int, user: models.User) -> tuple[models.Regi
         _put_on_waitlist(db, reg, now)
         db.flush()
         mail.send_waitlisted(db, reg, event, waitlist_position(db, reg))
+    live.notify_event_changed(db, event_id)
     db.commit()
     return reg, True
 
@@ -141,6 +142,7 @@ def cancel(db: Session, event_id: int, user: models.User) -> models.Registration
     db.flush()
     if freed_seat:
         promote(db, event, now)
+    live.notify_event_changed(db, event_id)
     db.commit()
     return reg
 

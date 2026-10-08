@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app import config, scheduler
 from app.db import get_db
-from app.routers import auth, checkin, events, mail, registrations
+from app.routers import auth, checkin, events, live, mail, registrations
 
 
 @asynccontextmanager
@@ -34,6 +34,7 @@ app.include_router(events.router)
 app.include_router(registrations.router)
 app.include_router(mail.router)
 app.include_router(checkin.router)
+app.include_router(live.router)
 
 
 @app.get("/api/health")

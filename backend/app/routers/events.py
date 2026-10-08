@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from app import clock, mail, models, registrations
+from app import clock, live, mail, models, registrations
 from app.deps import DB, CurrentUser
 from app.models import RegistrationStatus as S
 from app.schemas import EventIn, EventOut, EventPatch, OrganizerOut
@@ -100,5 +100,6 @@ def update_event(event_id: int, data: EventPatch, db: DB, user: CurrentUser) -> 
     # R-10: при увеличении лимита очередь продвигается сама.
     db.flush()
     registrations.promote(db, event, now)
+    live.notify_event_changed(db, event.id)
     db.commit()
     return event_out(get_event_or_404(db, event.id))

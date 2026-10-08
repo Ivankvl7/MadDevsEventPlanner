@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import joinedload
 
-from app import clock, models
+from app import clock, live, models
 from app.deps import DB, CurrentUser
 from app.models import RegistrationStatus as S
 from app.routers.events import get_event_or_404
@@ -67,6 +67,7 @@ def checkin(event_id: int, data: CheckinIn, db: DB, user: CurrentUser) -> Checki
     if reg_id is None:
         db.rollback()
         raise _rejection(db, event, code)
+    live.notify_event_changed(db, event.id)
     db.commit()
 
     reg = db.scalar(
