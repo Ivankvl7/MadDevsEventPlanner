@@ -20,4 +20,5 @@ COPY app ./app
 
 EXPOSE 8000
 # Миграции применяются при каждом старте (идемпотентно), затем запускается API.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Открытые SSE-потоки не держат остановку: через 5 с они закрываются принудительно.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 5"]
